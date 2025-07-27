@@ -16,6 +16,9 @@ use crate::reactor::Reactor;
 /// Number of currently active `block_on()` invocations.
 static BLOCK_ON_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+/// Size of the stack for the driver thread. Default is 200kB
+static STACK_SIZE: AtomicUsize = AtomicUsize::new(200_000);
+
 /// Unparker for the "async-io" thread.
 fn unparker() -> &'static parking::Unparker {
     static UNPARKER: OnceCell<parking::Unparker> = OnceCell::new();
@@ -30,6 +33,7 @@ fn unparker() -> &'static parking::Unparker {
         // parking.
         thread::Builder::new()
             .name("async-io".to_string())
+            .stack_size(STACK_SIZE.load(Ordering::SeqCst))
             .spawn(move || main_loop(parker))
             .expect("cannot spawn async-io thread");
 
@@ -293,6 +297,11 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
             }
         }
     })
+}
+
+/// Sets the size of the stack for the driver (async-io) thread
+pub fn set_driver_stack_size(sz: usize) {
+    STACK_SIZE.store(sz, Ordering::SeqCst);
 }
 
 /// Runs a closure when dropped.
